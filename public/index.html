@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Chat</title>
+    <style>
+        #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; display: none; }
+        #typing { color: gray; }
+        #usernameInput { margin-bottom: 10px; }
+        .message {
+            margin: 5px 0;
+            padding: 5px 10px;
+            border-radius: 10px;
+            max-width: 60%;
+            word-wrap: break-word;
+        }
+        .message.sent { background-color: #dcf8c6; align-self: flex-end; text-align: right; }
+        .message.received { background-color: black; color:white; align-self: flex-start; text-align: left; }
+    </style>
+</head>
+<body>
+    <div id="usernameInput">
+        <input type="text" id="username" placeholder="Enter your name">
+        <button onclick="joinChat()">Join Chat</button>
+    </div>
+    <div id="chat" style="display: flex; flex-direction: column;"></div>
+    <div id="typing"></div>
+    <input type="text" id="message" placeholder="Type a message..." style="display: none;">
+    <script>
+        let ws;
+        let username;
+        let typingTimeout;
+
+        function joinChat() {
+            username = document.getElementById('username').value;
+            if (!username) {
+                alert('Please enter your name.');
+                return;
+            }
+
+            ws = new WebSocket(`ws://${location.host}`);
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'join', username }));
+                document.getElementById('usernameInput').style.display = 'none';
+                document.getElementById('chat').style.display = 'flex';
+                document.getElementById('message').style.display = 'block';
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const chat = document.getElementById('chat');
+
+                if (data.type === 'message') {
+                    const message = document.createElement('div');
+                    message.textContent = `${data.username}: ${data.msg}`;
+                    message.className = 'message ' + (data.username === username ? 'sent' : 'received');
+                    chat.appendChild(message);
+                    document.getElementById('typing').textContent = '';
+                    chat.scrollTop = chat.scrollHeight;
+                } else if (data.type === 'typing') {
+                    document.getElementById('typing').textContent = data.msg ? `${data.username} is typing...` : '';
+                } else if (data.type === 'status') {
+                    const status = document.createElement('div');
+                    status.textContent = data.msg;
+                    status.style.color = 'gray';
+                    chat.appendChild(status);
+                    chat.scrollTop = chat.scrollHeight;
+                }
+            };
+
+            document.getElementById('message').addEventListener('keydown', function(e) {
+                clearTimeout(typingTimeout);
+                ws.send(JSON.stringify({ type: 'typing', msg: 'typing' }));
+                if (e.key === 'Enter') {
+                    const message = e.target.value;
+                    ws.send(JSON.stringify({ type: 'message', msg: message }));
+                    e.target.value = '';
+                } else {
+                    typingTimeout = setTimeout(() => {
+                        ws.send(JSON.stringify({ type: 'typing', msg: '' }));
+                    }, 1000);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
